@@ -1,0 +1,8 @@
+usrp.properties*
+
+target/
+.idea/
+
+*.class
+*.iml
+*.so
