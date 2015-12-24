@@ -7,7 +7,11 @@
 
     <groupId>org.anhonesteffort.usrp</groupId>
     <artifactId>dsp-usrp-source</artifactId>
-    <version>0.1</version>
+    <version>0.1.1</version>
+
+    <properties>
+        <uhd-java.version>0.2</uhd-java.version>
+    </properties>
 
     <repositories>
         <repository>
@@ -23,17 +27,17 @@
         <dependency>
             <groupId>org.anhonesteffort.dsp</groupId>
             <artifactId>dsp-common</artifactId>
-            <version>0.1</version>
+            <version>0.1.1</version>
         </dependency>
         <dependency>
             <groupId>org.anhonesteffort.uhd</groupId>
             <artifactId>uhd-java</artifactId>
-            <version>0.2</version>
+            <version>${uhd-java.version}</version>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-simple</artifactId>
-            <version>1.7.12</version>
+            <artifactId>slf4j-api</artifactId>
+            <version>1.7.13</version>
         </dependency>
         <dependency>
             <groupId>junit</groupId>
@@ -70,10 +74,10 @@
                                 <artifactItem>
                                     <groupId>org.anhonesteffort.uhd</groupId>
                                     <artifactId>uhd-java</artifactId>
-                                    <version>0.2</version>
+                                    <version>${uhd-java.version}</version>
                                     <type>jar</type>
                                     <includes>*.so</includes>
-                                    <outputDirectory>${project.build.outputDirectory}/native</outputDirectory>
+                                    <outputDirectory>${project.build.outputDirectory}</outputDirectory>
                                 </artifactItem>
                             </artifactItems>
                         </configuration>
@@ -87,7 +91,7 @@
                 <version>2.9</version>
                 <configuration>
                     <forkMode>always</forkMode>
-                    <argLine>-Djava.library.path=${project.build.outputDirectory}/native</argLine>
+                    <argLine>-Djava.library.path=${project.build.outputDirectory}</argLine>
                 </configuration>
             </plugin>
 
@@ -106,11 +110,9 @@
                         </goals>
                         <configuration>
                             <artifactSet>
-                                <excludes>
-                                    <exclude>junit:junit</exclude>
-                                    <exclude>org.slf4j:slf4j-simple</exclude>
-                                    <exclude>org.anhonesteffort.dsp:dsp-common</exclude>
-                                </excludes>
+                                <includes>
+                                    <include>org.anhonesteffort.uhd:uhd-java</include>
+                                </includes>
                             </artifactSet>
                         </configuration>
                     </execution>
