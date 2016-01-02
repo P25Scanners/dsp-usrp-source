@@ -1,11 +1,14 @@
 package org.anhonesteffort.usrp;
 
 import org.anhonesteffort.dsp.ChannelSpec;
-import org.anhonesteffort.dsp.ConcurrentSource;
 import org.anhonesteffort.dsp.sample.DynamicSink;
 import org.anhonesteffort.dsp.sample.Samples;
 import org.anhonesteffort.dsp.sample.TunableSamplesSource;
 import org.junit.Test;
+
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 public class UsrpTest {
 
@@ -51,13 +54,16 @@ public class UsrpTest {
     assert SINK.getSampleRate() == CHANNEL.getSampleRate();
     assert SINK.getFrequency()  == CHANNEL.getCenterFrequency();
 
+    final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor();
+    final Future          FUTURE   = EXECUTOR.submit(USRP);
+
     Thread.sleep(1000);
 
     final long MIN_SAMPLES_PRODUCED = (long) (CHANNEL.getSampleRate() * 0.80d);
     assert SINK.getSampleCount() > MIN_SAMPLES_PRODUCED;
 
     USRP.removeSink(SINK);
-    ConcurrentSource.shutdownSources();
+    FUTURE.cancel(true);
   }
 
 }

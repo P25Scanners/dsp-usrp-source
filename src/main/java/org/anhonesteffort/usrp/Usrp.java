@@ -36,6 +36,8 @@ import org.slf4j.LoggerFactory;
 
 public class Usrp extends TunableSamplesSource {
 
+  private static final Logger log = LoggerFactory.getLogger(Usrp.class);
+
   private final DeviceAddress address;
   private final MultiUsrp     multiUsrp;
   private final UsrpConfig    config;
@@ -78,13 +80,13 @@ public class Usrp extends TunableSamplesSource {
       for (long i = 0; i < rxSensorNames.size(); i++) {
         if (rxSensorNames.get(i).equals("lo_locked")) {
           if (!multiUsrp.get_rx_sensor("lo_locked", 0).to_bool())
-            throw new SamplesSourceException("ettus says that lo_locked must be true");
+            throw new SamplesSourceException(address.to_string() + " ettus says that lo_locked must be true");
           break;
         }
       }
 
     } catch (RuntimeException e) {
-      throw new SamplesSourceException("unable to configure uhd device " + address.to_string(), e);
+      throw new SamplesSourceException(address.to_string() + " unable to configure device", e);
     }
   }
 
@@ -105,7 +107,7 @@ public class Usrp extends TunableSamplesSource {
       return this.sampleRate;
 
     } catch (RuntimeException e) {
-      throw new SamplesSourceException("error setting usrp sample rate " + address.to_string(), e);
+      throw new SamplesSourceException(address.to_string() + " error setting sample rate", e);
     }
   }
 
@@ -113,43 +115,41 @@ public class Usrp extends TunableSamplesSource {
   protected Double setFrequency(Double frequency) throws SamplesSourceException {
     try {
 
-      multiUsrp.set_rx_freq(
-          new TuneRequest(frequency + config.getFrequencyCorrection()), 0
-      );
-
+      multiUsrp.set_rx_freq(new TuneRequest(frequency + config.getFrequencyCorrection()), 0);
       this.frequency = (multiUsrp.get_rx_freq(0) - config.getFrequencyCorrection());
       return this.frequency;
 
     } catch (RuntimeException e) {
-      throw new SamplesSourceException("error setting usrp frequency " + address.to_string(), e);
+      throw new SamplesSourceException(address.to_string() + " error setting frequency", e);
     }
   }
 
-  @Override
-  protected Runnable newProducer() {
-    return new SamplesProducer();
+  private void startStreaming() throws RuntimeException {
+    multiUsrp.issue_stream_cmd(
+        new StreamCommand(StreamCommand.START_CONTINUOUS),
+        MultiUsrp.ALL_CHANS
+    );
   }
 
-  private class SamplesProducer implements Runnable {
+  private void stopStreaming() {
+    try {
 
-    private final Logger     log = LoggerFactory.getLogger(SamplesProducer.class);
-    private final RxStreamer rxStreamer;
-
-    public SamplesProducer() {
-      rxStreamer = multiUsrp.getRxStream(new StreamArgs("fc32", "sc16"));
-    }
-
-    private void start() {
       multiUsrp.issue_stream_cmd(
-          new StreamCommand(StreamCommand.START_CONTINUOUS),
+          new StreamCommand(StreamCommand.STOP_CONTINUOUS),
           MultiUsrp.ALL_CHANS
       );
-    }
 
-    private void drainHardwareBuffer() {
-      long               drainTimeout  = System.currentTimeMillis() + 5000l;
-      RxMetadata         rxMetadata    = new RxMetadata();
-      ComplexFloatVector samplesVector = new ComplexFloatVector(rxBufferSize);
+    } catch (RuntimeException e) {
+      throw new SamplesSourceBrokenException(address.to_string() + " unknown error", e);
+    }
+  }
+
+  private void drainHardwareBuffer(RxStreamer rxStreamer) {
+    long               drainTimeout  = System.currentTimeMillis() + 5000l; // todo: config
+    RxMetadata         rxMetadata    = new RxMetadata();
+    ComplexFloatVector samplesVector = new ComplexFloatVector(rxBufferSize);
+
+    try {
 
       while (rxMetadata.error_code()    != RxMetadata.ERROR_TIMEOUT &&
              System.currentTimeMillis() <= drainTimeout)
@@ -159,53 +159,47 @@ public class Usrp extends TunableSamplesSource {
                         rxMetadata, 0.1, false);
       }
 
-      if (rxMetadata.error_code() != RxMetadata.ERROR_TIMEOUT)
-        throw new SamplesSourceBrokenException("failed to drain usrp hardware receive buffer");
+    } catch (RuntimeException e) {
+      throw new SamplesSourceBrokenException(address.to_string() + " unknown error", e);
     }
 
-    private void stop() {
-      try {
+    if (rxMetadata.error_code() != RxMetadata.ERROR_TIMEOUT)
+      throw new SamplesSourceBrokenException(address.to_string() + " failed to drain hardware receive buffer");
+  }
 
-        multiUsrp.issue_stream_cmd(
-            new StreamCommand(StreamCommand.STOP_CONTINUOUS),
-            MultiUsrp.ALL_CHANS
-        );
-        drainHardwareBuffer();
+  @Override
+  public Void call() {
+    RxStreamer         rxStreamer    = multiUsrp.getRxStream(new StreamArgs("fc32", "sc16"));
+    ComplexFloatVector samplesVector = new ComplexFloatVector(rxBufferSize);
+    RxMetadata         rxMetadata    = new RxMetadata();
 
-      } catch (RuntimeException e) {
-        throw new SamplesSourceBrokenException("unable to stop usrp receive stream", e);
-      }
-    }
+    try {
 
-    @Override
-    public void run() {
-      ComplexFloatVector samplesVector = new ComplexFloatVector(rxBufferSize);
-      RxMetadata         rxMetadata    = new RxMetadata();
+      startStreaming();
+      while (!Thread.interrupted()) {
+        rxStreamer.recv(samplesVector.front(),
+                        samplesVector.size(),
+                        rxMetadata, 0.1, false);
 
-      try {
-
-        start();
-        while (!Thread.interrupted()) {
-          rxStreamer.recv(samplesVector.front(),
-                          samplesVector.size(),
-                          rxMetadata, 0.1, false);
-
-          if (rxMetadata.error_code() == RxMetadata.ERROR_OVERFLOW) {
-            log.warn("usrp hardware receive buffer has overflowed");
-          } else if (rxMetadata.error_code() != RxMetadata.ERROR_NONE) {
-            throw new SamplesSourceBrokenException("usrp receive returned error " + rxMetadata.error_code());
-          } else {
-            broadcast(new Samples(samplesVector.toFloatBuffer()));
-          }
-
-          samplesVector = new ComplexFloatVector(rxBufferSize);
+        if (rxMetadata.error_code() == RxMetadata.ERROR_OVERFLOW) {
+          log.warn(address.to_string() + " hardware receive buffer has overflowed");
+        } else if (rxMetadata.error_code() != RxMetadata.ERROR_NONE) {
+          throw new SamplesSourceBrokenException(address.to_string() + " receive returned error " + rxMetadata.error_code());
+        } else {
+          broadcast(new Samples(samplesVector.toFloatBuffer()));
         }
 
-      } catch (RuntimeException e) {
-        throw new SamplesSourceBrokenException("error receiving samples from usrp", e);
-      } finally {
-        stop();
+        samplesVector = new ComplexFloatVector(rxBufferSize);
       }
+
+    } catch (RuntimeException e) {
+      throw new SamplesSourceBrokenException(address.to_string() + " unknown error", e);
+    } finally {
+      stopStreaming();
+      drainHardwareBuffer(rxStreamer);
     }
+
+    return null;
   }
+
 }
