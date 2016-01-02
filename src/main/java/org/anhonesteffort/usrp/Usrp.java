@@ -200,10 +200,11 @@ public class Usrp extends TunableSamplesSource {
 
           samplesVector = new ComplexFloatVector(rxBufferSize);
         }
-        stop();
 
       } catch (RuntimeException e) {
         throw new SamplesSourceBrokenException("error receiving samples from usrp", e);
+      } finally {
+        stop();
       }
     }
   }
