@@ -37,6 +37,7 @@ public class UsrpConfig {
   private final double gainVal1;
   private final double gainVal2;
   private final long   rxBufferSize;
+  private final long   rxDrainTimeoutMs;
 
   public UsrpConfig() throws IOException {
     Properties properties = new Properties();
@@ -54,6 +55,7 @@ public class UsrpConfig {
     gainVal1            = Double.parseDouble(properties.getProperty("gain_val1"));
     gainVal2            = Double.parseDouble(properties.getProperty("gain_val2"));
     rxBufferSize        = Long.parseLong(properties.getProperty("rx_buff_size"));
+    rxDrainTimeoutMs    = Long.parseLong(properties.getProperty("rx_drain_timeout_ms"));
   }
 
   public String getClockSource() {
@@ -103,4 +105,9 @@ public class UsrpConfig {
   public long getRxBufferSize() {
     return rxBufferSize;
   }
+
+  public long getRxDrainTimeoutMs() {
+    return rxDrainTimeoutMs;
+  }
+
 }

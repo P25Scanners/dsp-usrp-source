@@ -145,7 +145,7 @@ public class Usrp extends TunableSamplesSource {
   }
 
   private void drainHardwareBuffer(RxStreamer rxStreamer) {
-    long               drainTimeout  = System.currentTimeMillis() + 5000l; // todo: config
+    long               drainTimeout  = System.currentTimeMillis() + config.getRxDrainTimeoutMs();
     RxMetadata         rxMetadata    = new RxMetadata();
     ComplexFloatVector samplesVector = new ComplexFloatVector(rxBufferSize);
 
