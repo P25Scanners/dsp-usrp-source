@@ -27,7 +27,7 @@
         <dependency>
             <groupId>org.anhonesteffort.dsp</groupId>
             <artifactId>dsp-common</artifactId>
-            <version>0.1.4</version>
+            <version>0.1.5</version>
         </dependency>
         <dependency>
             <groupId>org.anhonesteffort.uhd</groupId>
